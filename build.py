@@ -5,7 +5,7 @@ data/*.csv(fetch.py가 쌓은 원자료)를 읽어 site/ 아래 정적 페이지
   records/날짜.html     그날 새로 공개된 건이 있을 때만 만드는 날짜별 기록
   weekly/날짜.html      월요일 지난주 요약, 토요일 용산·성동 30억 이상 거래
   feed.xml sitemap.xml robots.txt llms.txt data/*.csv
-원칙: 한남현대 명의만 쓴다. 동·호수는 쓰지 않는다. 한남더힐 26평형(전용 60㎡ 미만)은 싣지 않는다(2026.10.13 결정).
+원칙: 한남현대 명의만 쓴다. 동·호수는 쓰지 않는다. 한남더힐 26평형도 싣는다(2026.10.26 결정, 10.13 제외 결정을 바꿈).
 """
 import csv
 import datetime as dt
@@ -49,7 +49,8 @@ def load(name):
 
 
 def excluded(d):
-    return d["dong"] == "한남동" and d["jibun"] == "810" and float(d["area"]) < 60
+    # 2026.10.26부터 제외 없음. 다시 빼야 할 때를 위해 함수는 남겨 둔다.
+    return False
 
 
 def won(manwon):
@@ -283,7 +284,7 @@ def main():
     complex_html = ""
     for jb, nm in COMPLEXES:
         rows = sorted([d for d in hannam if d["jibun"] == jb], key=lambda x: x["ymd"], reverse=True)
-        note = " 26평형(전용 59㎡대) 거래는 싣지 않습니다." if jb == "810" else ""
+        note = ""
         complex_html += f"<h3>{nm} (한남동 {jb})</h3><p class='meta'>2025년 1월 이후 계약분 {len(rows)}건, 계약일 최신순.{note} (출처: {SRC_DEAL})</p>"
         complex_html += deal_table(rows, with_complex=False) if rows else "<p>공개된 신고가 없습니다.</p>"
 
@@ -352,7 +353,7 @@ def main():
     with open(os.path.join(OUT, "llms.txt"), "w", encoding="utf-8") as f:
         f.write(f"""# 한남현대 공개 기록
 
-> {OFFICE['name']}({OFFICE['addr']}, 등록번호 {OFFICE['reg']})가 서울부동산정보광장 공개 자료를 매일 아침 수집해 쌓는 한남더힐(한남동 810)·나인원한남(한남동 829) 아파트 매매 실거래 신고와 용산구 토지거래허가 처리 내역입니다. 숫자는 출처 그대로이며 평가나 전망은 없습니다. 한남더힐 전용 59㎡대 거래와 동·호수는 싣지 않습니다.
+> {OFFICE['name']}({OFFICE['addr']}, 등록번호 {OFFICE['reg']})가 서울부동산정보광장 공개 자료를 매일 아침 수집해 쌓는 한남더힐(한남동 810)·나인원한남(한남동 829) 아파트 매매 실거래 신고와 용산구 토지거래허가 처리 내역입니다. 숫자는 출처 그대로이며 평가나 전망은 없습니다. 동·호수는 싣지 않습니다.
 
 ## 자료
 - [첫 화면]({SITE_URL}/): 두 단지 실거래 표, 허가 월별 건수, 최근 기록
