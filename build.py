@@ -365,6 +365,11 @@ def main():
 - {SRC_PERMIT}: https://land.seoul.go.kr/land/other/contractStatus.do
 """)
     open(os.path.join(OUT, ".nojekyll"), "w").close()
+    # 검색엔진 소유 확인 파일(구글·네이버 등)은 verify/ 에 두면 사이트 맨 위에 그대로 올라간다.
+    vdir = os.path.join(HERE, "verify")
+    if os.path.isdir(vdir):
+        for name in os.listdir(vdir):
+            shutil.copy(os.path.join(vdir, name), os.path.join(OUT, name))
     print(f"pages={len(pages)} deals={len(hannam)} permits={len(hn_permits)}/{len(res_permits)}")
 
 
