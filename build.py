@@ -90,15 +90,19 @@ def floor_txt(f):
 # ---------------------------------------------------------------- 화면 틀
 
 CSS = """
-:root{--bg:#f6f5f2;--paper:#fffefb;--ink:#1c1b19;--muted:#68655f;--line:#dcd8cf;--soft:#efece5;--hn:#1f4fa8;--cut:#8a3b2e;
+:root{--bg:#f6f5f2;--paper:#fffefb;--ink:#1c1b19;--muted:#68655f;--line:#dcd8cf;--soft:#efece5;--hn:#1f4fa8;--logo:#173c64;--cut:#8a3b2e;
 --serif:"Noto Serif KR","Nanum Myeongjo",serif;--sans:"Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif}
-@media (prefers-color-scheme:dark){:root{--bg:#161615;--paper:#1e1d1b;--ink:#ebe9e4;--muted:#a29f98;--line:#383632;--soft:#262522;--hn:#8fb0ee;--cut:#e09a8b;color-scheme:dark}}
+@media (prefers-color-scheme:dark){:root{--bg:#161615;--paper:#1e1d1b;--ink:#ebe9e4;--muted:#a29f98;--line:#383632;--soft:#262522;--hn:#8fb0ee;--logo:#8fb0ee;--cut:#e09a8b;color-scheme:dark}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.8 var(--sans);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
 .wrap{max-width:860px;margin:0 auto;padding-block:36px 64px;display:flex;flex-direction:column;gap:36px}
 header{display:flex;flex-direction:column;gap:6px;border-bottom:1px solid var(--line);padding-bottom:20px}
 .office{font-size:14px;color:var(--muted);letter-spacing:.02em}
 .hn{color:var(--hn)}
+.logo{display:inline-flex;flex-direction:column;align-items:flex-start;text-decoration:none;color:var(--ink);font-family:var(--serif);line-height:1.15;gap:2px;margin-bottom:6px}
+.logo .lg-hn{font-size:30px;font-weight:600;color:var(--logo);letter-spacing:.04em}
+.logo .lg-of{font-size:19px;font-weight:600;letter-spacing:.06em}
+.logo .lg-en{font-size:11.5px;color:var(--muted);letter-spacing:.04em;font-family:Georgia,"Times New Roman",serif}
 h1{font-family:var(--serif);font-weight:600;font-size:clamp(26px,5vw,36px);line-height:1.3;margin:0;text-wrap:balance}
 h2{font-family:var(--serif);font-weight:600;font-size:22px;margin:0 0 8px;text-wrap:balance}
 h3{font-size:17px;margin:20px 0 6px}
@@ -156,7 +160,8 @@ def footer():
 
 
 def head_block(title, sub):
-    return f"""<header><div class="office"><span class="hn">한남현대</span>공인중개사사무소 · 40여 년 한남동의 기록</div>
+    return f"""<header><a class="logo" href="{SITE_URL}/" aria-label="한남현대공인중개사사무소 처음으로"><span class="lg-hn">한남현대</span><span class="lg-of">공인중개사사무소</span><span class="lg-en">Hannam Hyundai Real Estate Agency</span></a>
+<div class="office">40여 년 한남동의 기록</div>
 <h1>{esc(title)}</h1><div class="meta">{sub}</div></header>"""
 
 
