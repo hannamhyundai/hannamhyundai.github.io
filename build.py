@@ -1,10 +1,12 @@
 """한남현대 공개 기록 사이트 생성기.
 
 data/*.csv(fetch.py가 쌓은 원자료)를 읽어 site/ 아래 정적 페이지를 만든다.
-  index.html            첫 화면: 최근 공개분, 두 단지 실거래, 허가 월별 건수, 매수 대기 등록
+  index.html            첫 화면: 최근 공개분, 기사 기록, 두 단지 실거래, 허가 월별 건수, 매수 대기 등록
+  news.html             기사 기록 전체(data/news.csv). 제목을 누르면 언론사 원문으로 넘어간다.
   records/날짜.html     그날 새로 공개된 건이 있을 때만 만드는 날짜별 기록
   weekly/날짜.html      월요일 지난주 요약, 토요일 용산·성동 30억 이상 거래
   feed.xml sitemap.xml robots.txt llms.txt data/*.csv
+기사 기록 원칙(2026.10.27): 본문·사진은 옮기지 않고 제목·언론사·입력일·원문 링크와 한남현대가 새로 쓴 두세 줄 요약만 싣는다.
 원칙: 한남현대 명의만 쓴다. 동·호수는 쓰지 않는다. 한남더힐 26평형도 싣는다(2026.10.26 결정, 10.13 제외 결정을 바꿈).
 """
 import csv
@@ -123,6 +125,12 @@ td.num{text-align:right}
 .btn:focus-visible,a:focus-visible{outline:2px solid var(--muted);outline-offset:2px}
 ul.list{margin:0;padding-left:20px}
 a{color:inherit}
+.news{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
+.news li{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:16px 20px}
+.news .nt{font-family:var(--serif);font-weight:600;font-size:18px;line-height:1.5;text-decoration:none;display:block}
+.news .nt:hover{text-decoration:underline;text-underline-offset:3px}
+.news .nt::after{content:" ↗";font-family:var(--sans);font-size:14px;color:var(--muted)}
+.news p{margin:6px 0 0;font-size:15px}
 footer{border-top:1px solid var(--line);padding-top:18px;font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:4px}
 """
 
@@ -155,7 +163,8 @@ def footer():
 <div><span class="hn">한남현대</span>공인중개사사무소 · {esc(OFFICE['addr'])}</div>
 <div>중개사무소 등록번호 {OFFICE['reg']} · 대표 {OFFICE['ceo']} · 전화 {OFFICE['tel']}</div>
 <div>이 사이트는 공개된 기록을 정리한 것이며, 특정 매물의 표시나 광고가 아닙니다. 모든 숫자는 출처의 공개 자료 그대로이고 평가나 전망은 담지 않습니다.</div>
-<div><a href="{SITE_URL}/">처음으로</a> · <a href="{SITE_URL}/feed.xml">RSS</a> · <a href="{SITE_URL}/data/deals.csv">실거래 원자료 CSV</a> · <a href="{SITE_URL}/data/permits.csv">허가 원자료 CSV</a></div>
+<div>기사 기록의 요약은 한남현대가 원문을 읽고 새로 적은 것이며, 기사의 저작권은 각 언론사에 있습니다. 제목을 누르시면 원문이 열립니다.</div>
+<div><a href="{SITE_URL}/">처음으로</a> · <a href="{SITE_URL}/news.html">기사 기록</a> · <a href="{SITE_URL}/feed.xml">RSS</a> · <a href="{SITE_URL}/data/deals.csv">실거래 원자료 CSV</a> · <a href="{SITE_URL}/data/permits.csv">허가 원자료 CSV</a></div>
 </footer>"""
 
 
@@ -179,6 +188,15 @@ def deal_table(rows, with_seen=False, with_complex=True):
     return f'<div class="tbl"><table>{th}{"".join(trs)}</table></div>'
 
 
+def news_list(rows):
+    li = []
+    for n in rows:
+        li.append(f"<li><a class='nt' href='{esc(n['url'])}' target='_blank' rel='noopener'>{esc(n['title'])}</a>"
+                  f"<div class='meta'>{esc(n['outlet'])} · 입력 {kdate(n['published'])}</div>"
+                  f"<p>{esc(n['summary'])}</p></li>")
+    return f"<ul class='news'>{''.join(li)}</ul>"
+
+
 # ---------------------------------------------------------------- 모으기
 
 def main():
@@ -198,6 +216,9 @@ def main():
     hannam = [d for d in deals if d["dong"] == "한남동" and d["jibun"] in ("810", "829")]
     res_permits = [p for p in permits if p["use_purp"] == "주거용" and p["job"] == "허가"]
     hn_permits = [p for p in res_permits if p["dong"] == "한남동" and p["jibun"] in ("810", "829")]
+
+    news = sorted([n for n in load("news.csv") if n.get("url") and n.get("title")],
+                  key=lambda n: (n["published"], n.get("added", "")), reverse=True)
 
     pages = []  # (path, title, date_iso, summary)
 
@@ -309,10 +330,20 @@ def main():
                "distribution": [{"@type": "DataDownload", "encodingFormat": "text/csv", "contentUrl": f"{SITE_URL}/data/deals.csv"},
                                 {"@type": "DataDownload", "encodingFormat": "text/csv", "contentUrl": f"{SITE_URL}/data/permits.csv"}]}
 
+    news_html = ""
+    if news:
+        more = f"<p class='meta'><a href='{SITE_URL}/news.html'>기사 기록 전체 {len(news)}건 보기</a></p>" if len(news) > 6 else ""
+        news_html = f"<section><h2>한남동 기사 기록</h2><p class='meta'>한남더힐·나인원한남과 한남동 주거에 관한 기사입니다. 제목을 누르시면 언론사 원문이 열리고, 숫자와 내용의 출처는 해당 기사입니다.</p>{news_list(news[:6])}{more}</section>"
+        nbody = head_block("한남동 기사 기록", f"{len(news)}건 · 입력일 최신순")
+        nbody += f"<section><p class='lead'>한남더힐·나인원한남과 한남동 주거에 관한 기사를 모아 두었습니다. 제목을 누르시면 언론사 원문이 열리며, 요약은 한남현대가 원문을 읽고 짧게 옮겨 적은 것입니다.</p>{news_list(news)}</section>"
+        with open(os.path.join(OUT, "news.html"), "w", encoding="utf-8") as f:
+            f.write(page("한남동 기사 기록", nbody, "한남더힐·나인원한남과 한남동 주거에 관한 기사 제목, 언론사, 입력일, 원문 링크와 짧은 요약.", "news.html"))
+
     body = head_block("한남더힐과 나인원한남, 공개된 숫자 그대로의 기록",
                       f"마지막 수집 {esc(collected.replace('T', ' '))} · 매일 아침 7시 40분 갱신" if collected else "매일 아침 7시 40분 갱신")
     body += f"""<section><p class="lead">서울부동산정보광장에 올라오는 실거래 신고와 토지거래허가 처리 내역을 매일 아침 그대로 옮겨 적고, 처음 공개된 날짜와 함께 남겨 두겠습니다. 숫자마다 출처를 붙이며, 평가나 전망은 담지 않습니다.</p></section>
 <section><h2>최근 기록</h2><ul class="list">{recent_html}</ul></section>
+{news_html}
 <section><h2>두 단지 실거래 신고</h2>{complex_html}</section>
 <section><h2>토지거래허가 처리 건수</h2><p class="meta">주거용 허가 완료 건만 셉니다. 공개 자료에는 처리가 끝난 건만 올라오므로 신청되어 심사 중인 건은 들어 있지 않습니다. (출처: {SRC_PERMIT})</p>{permit_html}</section>
 <section class="card"><h2>매수 대기 등록</h2><p>한남더힐과 나인원한남의 매수를 기다리시는 분께서는 원하시는 평형과 시기를 남겨 두실 수 있습니다. 조건에 맞는 소식이 생기면 한남현대가 먼저 연락을 드리겠습니다.</p><a class="btn" href="{WAITLIST_URL}" rel="noopener">대기 명단에 이름 올리기</a></section>"""
@@ -338,6 +369,8 @@ def main():
     with open(os.path.join(OUT, "sitemap.xml"), "w", encoding="utf-8") as f:
         f.write('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n')
         f.write(f"<url><loc>{SITE_URL}/</loc><lastmod>{TODAY.isoformat()}</lastmod></url>\n")
+        if news:
+            f.write(f"<url><loc>{SITE_URL}/news.html</loc><lastmod>{news[0].get('added') or TODAY.isoformat()}</lastmod></url>\n")
         for p, _, day, _ in pages:
             f.write(f"<url><loc>{SITE_URL}/{p}</loc><lastmod>{day}</lastmod></url>\n")
         f.write("</urlset>\n")
@@ -365,6 +398,7 @@ def main():
 - [실거래 원자료 CSV]({SITE_URL}/data/deals.csv): 단지, 지번, 전용면적, 계약일, 거래금액(만원), 층, 해제 여부, 처음 공개 확인일
 - [허가 원자료 CSV]({SITE_URL}/data/permits.csv): 허가일, 주소(지번), 이용목적, 처리 구분, 처음 공개 확인일
 - [RSS]({SITE_URL}/feed.xml): 날짜별 기록과 주간 정리
+- [기사 기록]({SITE_URL}/news.html): 한남동 주거 관련 기사 제목·언론사·입력일·원문 링크와 짧은 요약
 
 ## 출처
 - {SRC_DEAL}: https://land.seoul.go.kr/land/rtms/rtmsApartment.do
