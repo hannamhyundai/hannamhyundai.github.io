@@ -9,6 +9,7 @@ on:
     paths:
       - "data/news.csv"   # 기사 기록을 더하면 바로 다시 만든다
       - "build.py"
+      - ".github/workflows/daily.yml"
 
 permissions:
   contents: write
