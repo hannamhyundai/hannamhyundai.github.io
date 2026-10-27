@@ -6,6 +6,7 @@ data/*.csv(fetch.py가 쌓은 원자료)를 읽어 site/ 아래 정적 페이지
   news.json             최근 기사 6건. luxuryhome.kr 첫 화면 '한남동 기사' 칸이 읽어 간다.
   records/날짜.html     그날 새로 공개된 건이 있을 때만 만드는 날짜별 기록
   weekly/날짜.html      월요일 지난주 요약, 토요일 용산·성동 30억 이상 거래
+  q/h/, q/n/            우편 QR 전용 단지별 페이지(검색 제외, 방문 수를 구글 폼에 기록)
   feed.xml sitemap.xml robots.txt llms.txt data/*.csv
 기사 기록 원칙(2026.10.27): 본문·사진은 옮기지 않고 제목·언론사·입력일·원문 링크와 한남현대가 새로 쓴 두세 줄 요약만 싣는다.
 원칙: 한남현대 명의만 쓴다. 동·호수는 쓰지 않는다. 한남더힐 26평형도 싣는다(2026.10.26 결정, 10.13 제외 결정을 바꿈).
@@ -37,6 +38,16 @@ SRC_DEAL = "서울부동산정보광장 실거래가(아파트 매매)"
 SRC_PERMIT = "서울부동산정보광장 토지거래허가 내역(국토교통부 K-Geo 연계)"
 COMPLEXES = [("810", "한남더힐"), ("829", "나인원한남")]
 WEEKDAY = "월화수목금토일"
+
+# 우편 QR 전용 주소(2026.10.27). 우편물 QR은 단지별로 아래 주소를 가리킨다.
+#   /q/h/ 한남더힐 소유주께 보낸 우편, /q/n/ 나인원한남 소유주께 보낸 우편
+# 방문하면 구글 폼 "한남현대 우편 QR 방문 기록"에 '단지|동작|방문번호|회차' 한 줄이 쌓인다.
+# 방문번호는 브라우저마다 무작위로 만든 값이라 개인을 알아볼 수 없다. 주소 끝에 ?test=1 을 붙이면 단지 대신 test로 남는다.
+# 다음 우편부터는 MAIL_CAMPAIGN만 바꾸면 회차별로 나뉘어 집계된다.
+QR_LOG_URL = "https://docs.google.com/forms/d/e/1FAIpQLSe5ivAGs7MbzaoN6HfgnNDfxuW03u7kMcoa0e4UH7CvT64xjQ/formResponse"
+QR_LOG_ENTRY = "entry.1180566483"
+MAIL_CAMPAIGN = "2026-10"
+QR_PAGES = [("h", "hill", "810", "한남더힐", "n"), ("n", "nine", "829", "나인원한남", "h")]
 
 esc = html.escape
 
@@ -136,7 +147,7 @@ footer{border-top:1px solid var(--line);padding-top:18px;font-size:13px;color:va
 """
 
 
-def page(title, body, desc, path, jsonld=None):
+def page(title, body, desc, path, jsonld=None, extra_head="", tail=""):
     canon = f"{SITE_URL}/{path}".replace("/index.html", "/")
     ld = ""
     for obj in (jsonld or []):
@@ -144,7 +155,7 @@ def page(title, body, desc, path, jsonld=None):
     return f"""<!doctype html>
 <html lang="ko"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>{esc(title)}</title>
+{extra_head}<title>{esc(title)}</title>
 <meta name="description" content="{esc(desc)}">
 <link rel="canonical" href="{canon}">
 <link rel="alternate" type="application/rss+xml" title="한남현대 공개 기록" href="{SITE_URL}/feed.xml">
@@ -156,7 +167,7 @@ def page(title, body, desc, path, jsonld=None):
 {ld}</head><body><div class="wrap">
 {body}
 {footer()}
-</div></body></html>"""
+</div>{tail}</body></html>"""
 
 
 def footer():
@@ -196,6 +207,54 @@ def news_list(rows):
                   f"<div class='meta'>{esc(n['outlet'])} · 입력 {kdate(n['published'])}</div>"
                   f"<p>{esc(n['summary'])}</p></li>")
     return f"<ul class='news'>{''.join(li)}</ul>"
+
+
+# ---------------------------------------------------------------- 우편 QR 전용 페이지
+
+QR_JS = """<script>
+(function(){
+  var F=%(url)s, E=%(entry)s, C=%(camp)s;
+  var src=/[?&]test=1/.test(location.search)?"test":%(src)s;
+  var vid;
+  try{vid=localStorage.getItem("hh_vid");if(!vid){vid=Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4);localStorage.setItem("hh_vid",vid);}}
+  catch(e){vid="x"+Math.random().toString(36).slice(2,10);}
+  function log(ev){
+    var b=new URLSearchParams();b.append(E,[src,ev,vid,C].join("|"));
+    try{if(navigator.sendBeacon&&navigator.sendBeacon(F,b))return;}catch(e){}
+    try{fetch(F,{method:"POST",mode:"no-cors",body:b,keepalive:true});}catch(e){}
+  }
+  log("view");
+  var a=document.querySelectorAll("[data-ev]");
+  for(var i=0;i<a.length;i++){(function(el){el.addEventListener("click",function(){log(el.getAttribute("data-ev"));});})(a[i]);}
+})();
+</script>"""
+
+
+def mail_pages(hannam, hn_permits, collected):
+    """우편 QR이 여는 단지별 페이지. 검색에는 올리지 않는다(noindex, 사이트맵 제외)."""
+    for slug, src, jb, nm, other in QR_PAGES:
+        rows = sorted([d for d in hannam if d["jibun"] == jb], key=lambda x: x["ymd"], reverse=True)
+        prm = sorted([p for p in hn_permits if p["jibun"] == jb], key=lambda x: x["hndl_ymd"], reverse=True)
+        other_nm = dict((s, n) for s, _, _, n, _ in QR_PAGES)[other]
+        sub = f"마지막 수집 {esc(collected.replace('T', ' '))} · 매일 아침 7시 40분 갱신" if collected else "매일 아침 7시 40분 갱신"
+        body = head_block(f"{nm}의 거래 기록", sub)
+        body += f"""<section><p class="lead">우편을 받아 보시고 찾아 주셔서 감사합니다. 서울부동산정보광장에 신고된 {nm}의 실거래와 토지거래허가를 날짜순으로 정리해 두었습니다. 기록은 매일 아침 새로 이어집니다.</p></section>
+<section><h2>실거래 신고</h2><p class="meta">2025년 1월 이후 계약분 {len(rows)}건, 계약일 최신순. 계약 뒤 30일 안에 신고되므로 최근 거래는 늦게 올라올 수 있습니다. (출처: {SRC_DEAL})</p>
+{deal_table(rows, with_complex=False) if rows else "<p>공개된 신고가 없습니다.</p>"}</section>"""
+        if prm:
+            li = "".join(f"<li>허가일 {kdate(p['hndl_ymd'])}</li>" for p in prm[:12])
+            body += f"""<section><h2>토지거래허가</h2><p class="meta">한남동 {jb} 지번의 주거용 허가 완료 건, 최근 {min(len(prm), 12)}건. 처리가 끝난 건만 공개되므로 심사 중인 건은 들어 있지 않습니다. (출처: {SRC_PERMIT})</p><ul class="list">{li}</ul></section>"""
+        body += f"""<section class="card"><h2>한남현대 상담</h2><p>매매와 임대, 잔금과 세무 일정에 관한 말씀은 전화로 편히 건네 주십시오. 방문하실 때는 파리크라상 한남점 발렛에 "한남현대부동산 방문"이라고 말씀하시면 됩니다.</p>
+<div><a class="btn" href="tel:{OFFICE['tel'].replace('-', '')}" data-ev="call">{OFFICE['tel']} 전화하기</a></div></section>
+<section><p><a href="{SITE_URL}/" data-ev="home">{other_nm}까지 함께 담긴 전체 기록 보기</a></p>
+<p class="meta">우편으로 찾아 주신 분이 몇 분인지 세기 위해, 개인을 알아볼 수 없는 무작위 방문 번호만 남깁니다. 이름이나 연락처는 기록하지 않습니다.</p></section>"""
+        js = QR_JS % {"url": json.dumps(QR_LOG_URL), "entry": json.dumps(QR_LOG_ENTRY),
+                      "camp": json.dumps(MAIL_CAMPAIGN), "src": json.dumps(src)}
+        path = f"q/{slug}/index.html"
+        os.makedirs(os.path.join(OUT, "q", slug), exist_ok=True)
+        with open(os.path.join(OUT, path), "w", encoding="utf-8") as f:
+            f.write(page(f"{nm}의 거래 기록 · 한남현대", body, f"{nm} 실거래 신고와 토지거래허가 공개 기록.", path,
+                         extra_head='<meta name="robots" content="noindex,nofollow">\n', tail=js))
 
 
 # ---------------------------------------------------------------- 모으기
@@ -356,6 +415,9 @@ def main():
     with open(os.path.join(OUT, "index.html"), "w", encoding="utf-8") as f:
         f.write(page("한남현대 공개 기록", body, "한남더힐·나인원한남 실거래 신고와 토지거래허가 처리 내역을 서울부동산정보광장 공개 자료 그대로 매일 쌓는 한남현대공인중개사사무소의 기록.", "index.html", [org, dataset]))
 
+    # ---- 우편 QR 전용 페이지(검색 제외)
+    mail_pages(hannam, hn_permits, collected)
+
     # ---- 부속 파일
     for name in ("deals.csv", "permits.csv"):
         src = os.path.join(DATA, name)
@@ -389,7 +451,7 @@ def main():
         f.write(f'<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0"><channel><title>한남현대 공개 기록</title><link>{SITE_URL}/</link><description>한남더힐·나인원한남 실거래와 토지거래허가 공개 기록</description><language>ko</language>\n{items}</channel></rss>\n')
 
     with open(os.path.join(OUT, "robots.txt"), "w", encoding="utf-8") as f:
-        f.write("User-agent: *\nAllow: /\n\n")
+        f.write("User-agent: *\nAllow: /\nDisallow: /q/\n\n")
         for bot in ("GPTBot", "OAI-SearchBot", "ChatGPT-User", "ClaudeBot", "Claude-SearchBot", "PerplexityBot", "Google-Extended", "Yeti", "Bingbot"):
             f.write(f"User-agent: {bot}\nAllow: /\n\n")
         f.write(f"Sitemap: {SITE_URL}/sitemap.xml\n")
