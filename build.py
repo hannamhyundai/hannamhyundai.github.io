@@ -3,6 +3,7 @@
 data/*.csv(fetch.py가 쌓은 원자료)를 읽어 site/ 아래 정적 페이지를 만든다.
   index.html            첫 화면: 최근 공개분, 기사 기록, 두 단지 실거래, 허가 월별 건수, 매수 대기 등록
   news.html             기사 기록 전체(data/news.csv). 제목을 누르면 언론사 원문으로 넘어간다.
+  news.json             최근 기사 6건. luxuryhome.kr 첫 화면 '한남동 기사' 칸이 읽어 간다.
   records/날짜.html     그날 새로 공개된 건이 있을 때만 만드는 날짜별 기록
   weekly/날짜.html      월요일 지난주 요약, 토요일 용산·성동 30억 이상 거래
   feed.xml sitemap.xml robots.txt llms.txt data/*.csv
@@ -331,6 +332,11 @@ def main():
                                 {"@type": "DataDownload", "encodingFormat": "text/csv", "contentUrl": f"{SITE_URL}/data/permits.csv"}]}
 
     news_html = ""
+    # luxuryhome.kr 첫 화면이 읽어 가는 최근 기사 목록(제목·언론사·입력일·원문 링크·요약)
+    with open(os.path.join(OUT, "news.json"), "w", encoding="utf-8") as f:
+        json.dump({"updated": TODAY.isoformat(), "count": len(news),
+                   "items": [{k: n.get(k, "") for k in ("published", "outlet", "title", "url", "summary")} for n in news[:6]]},
+                  f, ensure_ascii=False)
     if news:
         more = f"<p class='meta'><a href='{SITE_URL}/news.html'>기사 기록 전체 {len(news)}건 보기</a></p>" if len(news) > 6 else ""
         news_html = f"<section><h2>한남동 기사 기록</h2><p class='meta'>한남더힐·나인원한남과 한남동 주거에 관한 기사입니다. 제목을 누르시면 언론사 원문이 열리고, 숫자와 내용의 출처는 해당 기사입니다.</p>{news_list(news[:6])}{more}</section>"
