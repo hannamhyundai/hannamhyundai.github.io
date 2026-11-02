@@ -6,6 +6,7 @@ data/*.csv(fetch.py가 쌓은 원자료)를 읽어 site/ 아래 정적 페이지
   news.json             최근 기사 6건. luxuryhome.kr 첫 화면 '한남동 기사' 칸이 읽어 간다.
   records/날짜.html     그날 새로 공개된 건이 있을 때만 만드는 날짜별 기록
   weekly/날짜.html      월요일 지난주 요약, 토요일 용산·성동 30억 이상 거래
+  notes/슬러그.html     기록 글(posts/*.html). 손으로 쓴 정리 글을 최근 기록·RSS·사이트맵에 함께 올린다.
   q/h/, q/n/            우편 QR 전용 단지별 페이지(검색 제외, 방문 수를 구글 폼에 기록)
   feed.xml sitemap.xml robots.txt llms.txt data/*.csv
 기사 기록 원칙(2026.10.27): 본문·사진은 옮기지 않고 제목·언론사·입력일·원문 링크와 한남현대가 새로 쓴 두세 줄 요약만 싣는다.
@@ -21,6 +22,7 @@ from collections import Counter, defaultdict
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "data")
+POSTS = os.path.join(HERE, "posts")
 OUT = os.path.join(HERE, "site")
 SITE_URL = os.environ.get("SITE_URL", "https://hannamhyundai.github.io").rstrip("/")
 KST = dt.timezone(dt.timedelta(hours=9))
@@ -60,6 +62,43 @@ def load(name):
         return []
     with open(p, encoding="utf-8") as f:
         return list(csv.DictReader(f))
+
+
+def load_posts():
+    """posts/*.html 기록 글을 읽는다.
+
+    파일 머리에 'title: / date: YYYY-MM-DD / slug: / summary:' 줄을 두고, '---' 한 줄 아래에 본문 HTML을 쓴다.
+    date가 오늘보다 뒤인 글은 그날이 될 때까지 올리지 않는다.
+    """
+    out = []
+    if not os.path.isdir(POSTS):
+        return out
+    for name in sorted(os.listdir(POSTS)):
+        if not name.endswith(".html"):
+            continue
+        with open(os.path.join(POSTS, name), encoding="utf-8") as f:
+            head, sep, body = f.read().partition("\n---\n")
+        if not sep:
+            continue
+        meta = {}
+        for line in head.splitlines():
+            k, _, v = line.partition(":")
+            if v.strip():
+                meta[k.strip()] = v.strip()
+        slug = meta.get("slug", "")
+        if not (meta.get("title") and meta.get("date") and slug) or not all(c.isascii() and (c.isalnum() or c == "-") for c in slug):
+            print(f"기록 글 건너뜀: {name} (title·date·slug 확인)")
+            continue
+        try:
+            day = dt.date.fromisoformat(meta["date"])
+        except ValueError:
+            print(f"기록 글 건너뜀: {name} (date 형식)")
+            continue
+        if day > TODAY:
+            continue
+        out.append({"title": meta["title"], "date": day.isoformat(), "slug": slug,
+                    "summary": meta.get("summary", ""), "body": body.strip()})
+    return out
 
 
 def excluded(d):
@@ -270,7 +309,7 @@ def main():
 
     if os.path.exists(OUT):
         shutil.rmtree(OUT)
-    for sub in ("records", "weekly", "data"):
+    for sub in ("records", "weekly", "notes", "data"):
         os.makedirs(os.path.join(OUT, sub), exist_ok=True)
 
     hannam = [d for d in deals if d["dong"] == "한남동" and d["jibun"] in ("810", "829")]
@@ -361,6 +400,14 @@ def main():
                         f.write(page(title, body, summary, path))
                     pages.append((path, title, cur.isoformat(), summary))
             cur += dt.timedelta(days=1)
+
+    # ---- 기록 글: posts/*.html
+    for post in load_posts():
+        path = f"notes/{post['slug']}.html"
+        body = head_block(post["title"], f"{kdate_w(post['date'])} 정리") + post["body"]
+        with open(os.path.join(OUT, path), "w", encoding="utf-8") as f:
+            f.write(page(post["title"], body, post["summary"] or post["title"], path))
+        pages.append((path, post["title"], post["date"], post["summary"]))
 
     # ---- 첫 화면
     recent = sorted(pages, key=lambda x: x[2], reverse=True)[:12]
@@ -465,7 +512,7 @@ def main():
 - [첫 화면]({SITE_URL}/): 두 단지 실거래 표, 허가 월별 건수, 최근 기록
 - [실거래 원자료 CSV]({SITE_URL}/data/deals.csv): 단지, 지번, 전용면적, 계약일, 거래금액(만원), 층, 해제 여부, 처음 공개 확인일
 - [허가 원자료 CSV]({SITE_URL}/data/permits.csv): 허가일, 주소(지번), 이용목적, 처리 구분, 처음 공개 확인일
-- [RSS]({SITE_URL}/feed.xml): 날짜별 기록과 주간 정리
+- [RSS]({SITE_URL}/feed.xml): 날짜별 기록, 주간 정리, 기록 글
 - [기사 기록]({SITE_URL}/news.html): 한남동 주거 관련 기사 제목·언론사·입력일·원문 링크와 짧은 요약
 
 ## 출처
