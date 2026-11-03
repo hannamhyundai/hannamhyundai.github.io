@@ -4,6 +4,7 @@ data/*.csv(fetch.py가 쌓은 원자료)를 읽어 site/ 아래 정적 페이지
   index.html            첫 화면: 최근 공개분, 기사 기록, 두 단지 실거래, 허가 월별 건수, 매수 대기 등록
   news.html             기사 기록 전체(data/news.csv). 제목을 누르면 언론사 원문으로 넘어간다.
   news.json             최근 기사 6건. luxuryhome.kr 첫 화면 '한남동 기사' 칸이 읽어 간다.
+  listings.json         한남현대 접수 매물 수(data/listings.csv, 숫자만). luxuryhome.kr 첫 화면 '한남현대 접수 매물' 칸이 읽어 간다.
   records/날짜.html     그날 새로 공개된 건이 있을 때만 만드는 날짜별 기록
   weekly/날짜.html      월요일 지난주 요약, 토요일 용산·성동 30억 이상 거래
   notes/슬러그.html     기록 글(posts/*.html). 손으로 쓴 정리 글을 최근 기록·RSS·사이트맵에 함께 올린다.
@@ -436,6 +437,18 @@ def main():
                "temporalCoverage": f"2025-01-01/{TODAY.isoformat()}", "spatialCoverage": "서울특별시 용산구 한남동",
                "distribution": [{"@type": "DataDownload", "encodingFormat": "text/csv", "contentUrl": f"{SITE_URL}/data/deals.csv"},
                                 {"@type": "DataDownload", "encodingFormat": "text/csv", "contentUrl": f"{SITE_URL}/data/permits.csv"}]}
+
+    # luxuryhome.kr 첫 화면 '한남현대 접수 매물' 칸이 읽어 가는 숫자(2026.11.3부터, 구글 시트 게시 주소가 503이라 옮김).
+    # 단지별 건수와 기준일만 싣는다. 동·호수·가격은 넣지 않는다. 페이지·사이트맵에는 걸지 않는다.
+    lrows = []
+    for r in load("listings.csv"):
+        c = (r.get("매물 수") or "").strip()
+        if (r.get("단지") or "").strip() and c.isdigit():
+            lrows.append({"complex": r["단지"].strip(), "count": int(c), "as_of": (r.get("기준일") or "").strip()})
+    if lrows:
+        with open(os.path.join(OUT, "listings.json"), "w", encoding="utf-8") as f:
+            json.dump({"updated": TODAY.isoformat(), "as_of": max(x["as_of"] for x in lrows),
+                       "total": sum(x["count"] for x in lrows), "items": lrows}, f, ensure_ascii=False)
 
     news_html = ""
     # luxuryhome.kr 첫 화면이 읽어 가는 최근 기사 목록(제목·언론사·입력일·원문 링크·요약)
