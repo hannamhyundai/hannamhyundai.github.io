@@ -41,7 +41,9 @@ jobs:
           # 수집 중에 다른 변경(기사 추가 등)이 먼저 올라가면 push가 거절되므로
           # 최신 main을 받아 위에 얹은 뒤 다시 올린다. 최대 3번 시도.
           for i in 1 2 3; do
-            git pull --rebase --autostash origin main && git push origin HEAD:main && exit 0
+            # 두 실행이 겹치면 data/last_run.json 등이 부딪힌다. 같은 원자료를 받으므로 이번 실행(나중 수집분)을 따른다.
+            git pull --rebase --autostash -X theirs origin main && git push origin HEAD:main && exit 0
+            git rebase --abort 2>/dev/null || true
             echo "push 재시도 $i"; sleep 10
           done
           exit 1
